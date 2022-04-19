@@ -1,4 +1,6 @@
 import torch
+import torch.nn as nn
+from torch.nn.parameter import Parameter, UninitializedParameter
 
 
 def sparse_dropout(x, keep_prob, noise_shape):
