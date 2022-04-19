@@ -1,4 +1,5 @@
 from turtle import forward
+from unicodedata import decimal
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter, UninitializedParameter
@@ -113,6 +114,9 @@ class Dense(nn.Module):
 
 
 class GraphLayer(nn.Module):
+    """
+    Implements a GraphLayer which can have sparse or dense inputs.
+    """
 
     def __init__(self, input_dim, output_dim, configs, dropout=False,
                  sparse_inputs=False, activation=nn.ReLU, bias=False,
@@ -168,5 +172,47 @@ class GraphLayer(nn.Module):
             output = gru_unit(self.support, output, self.vars, 
                               self.activation, self.mask, 1-self.dropout, 
                               self.sparse_inputs)
+
+        return output
+
+
+class ReadoutLayer(nn.Module):
+
+    def __init__(self, input_dim, output_dim, configs, dropout=0.,
+                 sparse_inputs=False, act=nn.ReLU, bias=False, **kwargs):
+        super(ReadoutLayer, self).__init__(**kwargs)
+
+        if dropout:
+            self.dropout = configs['dropout']
+        else:
+            self.dropout = 0.
+        
+        self.act = act
+        self.sparse_inputs = sparse_inputs
+        self.bias = bias
+        self.mask = configs['mask']
+
+        self.vars = nn.ParameterDict({
+            'weights_att': glorot([input_dim, 1]),
+            'weights_emb': glorot([input_dim, input_dim]),
+            'weights_mlp': glorot([input_dim, output_dim]),
+            'bias_att': zeros([1]),
+            'bias_emb': zeros([input_dim]),
+            'bias_mlp': zeros([output_dim])
+        })
+
+    def forward(self, x):
+        att = nn.Sigmoid(dot(x, self.vars['weights_att']) + self.vars['bias_att'])
+        emb = self.act(dot(x, self.vars['weights_emb']) + self.vars['bias_emb'])
+
+        N = torch.sum(self.mask, dim=1)
+        M = (self.mask-1) * 1e9
+    
+        g = self.mask * att * emb
+        g = torch.sum(g, dim=1) / N + torch.sum(g + M, dim=1)
+        g = nn.Dropout(g, 1-self.dropout)
+
+        # Classify
+        output = torch.mm(g, self.vars['weights_mlp']) + self.vars['bias_mlp']        
 
         return output
