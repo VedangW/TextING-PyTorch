@@ -1,5 +1,3 @@
-from turtle import forward
-from unicodedata import decimal
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
@@ -209,11 +207,13 @@ class ReadoutLayer(nn.Module):
         N = torch.sum(self.mask, dim=1)
         M = (self.mask-1) * 1e9
     
+        # TODO: Re-implement for sparse inputs
         g = self.mask * att * emb
         g = torch.sum(g, dim=1) / N + torch.sum(g + M, dim=1)
         g = nn.Dropout(g, 1-self.dropout)
 
         # Classify
+        # TODO: Re-implement using dot
         output = torch.mm(g, self.vars['weights_mlp']) + self.vars['bias_mlp']        
 
         return output
