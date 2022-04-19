@@ -19,3 +19,22 @@ def sparse_dropout(x, keep_prob, noise_shape):
     out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
     out = out * (1./ (keep_prob))
     return out
+
+
+def sparse_dense_matmul_batch(sp_a, b):
+    """
+    Wrapper around torch.sparse.mm.
+
+    Parameters
+    ----------
+    sp_a: torch SparseTensor
+        mat1
+    b: torch Tensor
+        mat2
+    
+    Returns
+    -------
+    c: torch Tensor
+        mat1 x mat2
+    """
+    return torch.sparse.mm(sp_a, b)
