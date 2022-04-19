@@ -1,13 +1,14 @@
+import torch
 import torch.nn as nn
 
 def uniform(shape, scale=0.05):
-    pass
+    return nn.init.uniform_(torch.empty(shape), a=-scale, b=scale)
 
 def glorot(shape):
-    pass
+    return nn.init.xavier_uniform_(torch.empty(shape), gain=1.)
 
 def zeros(shape):
-    pass
+    return nn.init.zeros_(torch.empty(shape))
 
 def ones(shape):
-    pass
+    return nn.init.ones_(torch.empty(shape))
