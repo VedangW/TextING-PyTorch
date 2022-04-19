@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 
-from inits import glorot, zeros
+from texting.inits import glorot, zeros
 
 
 def sparse_dropout(x, keep_prob, noise_shape):
