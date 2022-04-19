@@ -2,9 +2,9 @@ from turtle import forward
 from unicodedata import decimal
 import torch
 import torch.nn as nn
-from torch.nn.parameter import Parameter, UninitializedParameter
+from torch.nn.parameter import Parameter
 
-from inits import glorot, uniform, zeros, ones
+from inits import glorot, zeros
 
 
 def sparse_dropout(x, keep_prob, noise_shape):
@@ -177,6 +177,7 @@ class GraphLayer(nn.Module):
 
 
 class ReadoutLayer(nn.Module):
+    """ Implements Readout layer of TextING. """
 
     def __init__(self, input_dim, output_dim, configs, dropout=0.,
                  sparse_inputs=False, act=nn.ReLU, bias=False, **kwargs):
