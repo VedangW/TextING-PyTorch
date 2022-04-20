@@ -1,2 +1,5 @@
-data
-data/*
+data/
+__pycache__/
+glove*
+texting/saved_models/
+saved_models/

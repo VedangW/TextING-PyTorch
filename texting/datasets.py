@@ -1,13 +1,15 @@
 import sys
 import numpy as np
 import pickle as pkl
+import os
 
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
 
 class GraphDataset(Dataset):
-    def __init__(self, dataset_str, part='train'):
+    def __init__(self, dataset_str, data_dir, part='train'):
+        self.data_dir = data_dir
         self.adjs, self.features, self.y = self._load_data(dataset_str, part)
         self.adjs, self.mask = self._preprocess_adj(self.adjs)
         self.features = self._preprocess_features(self.features)
@@ -44,7 +46,7 @@ class GraphDataset(Dataset):
         
         objects = []
         for i in range(len(names)):
-            with open("data/ind.{}.{}".format(dataset_str, names[i]), 'rb') as f:
+            with open(os.path.join(self.data_dir, f"ind.{dataset_str}.{names[i]}"), 'rb') as f:
                 if sys.version_info > (3, 0):
                     objects.append(pkl.load(f, encoding='latin1'))
                 else:
@@ -53,7 +55,7 @@ class GraphDataset(Dataset):
         x_adj, x_embed, y = tuple(objects)
         
         if part == 'val':
-            with open(f'data/ind.{dataset_str}.y', 'rb') as f:
+            with open(os.path.join(self.data_dir, f'ind.{dataset_str}.y'), 'rb') as f:
                 if sys.version_info > (3, 0):
                     temp = pkl.load(f, encoding='latin1')
                 else:

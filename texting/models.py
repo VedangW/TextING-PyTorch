@@ -4,9 +4,9 @@ from layers import Dense, GraphLayer, ReadoutLayer
 
 
 class Model(nn.Module):
-
     def __init__(self):
         super(Model, self).__init__()
+    
     
 class MLP(Model):
     def __init__(self, configs, input_dim, hidden_dim, output_dim):
