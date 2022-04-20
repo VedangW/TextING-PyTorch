@@ -15,7 +15,6 @@ def to_tensor_device(*args, device):
         output.append(torch.tensor(arg).to(device).float())
     return output
 
-
 def evaluate(features, support, mask, labels, placeholders):
     ...
 
@@ -29,22 +28,24 @@ def train(model, train_loader, val_loader, epochs, args):
     for epoch in range(epochs):
         epoch_loss = 0
         total_samples = 0
+        total_correct = 0
         model.train()
         for feat, adj, mask, y in tqdm(train_loader):
             inputs = to_tensor_device(feat, mask, adj, device=args.device)
+            y = y.to(args.device)
             output = model(*inputs)
             weights_loss = model.l2_loss()
-            classification_loss = criterion(output, y.to(args.device))
+            classification_loss = criterion(output, y)
             loss = weights_loss + classification_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
             epoch_loss += loss.item() * feat.shape[0]
             total_samples += feat.shape[0]
+            total_correct += (output.argmax(dim=1) == y).sum().item()
 
         epoch_loss /= total_samples
-        print(f'Epoch: {epoch}, loss: {epoch_loss}')
+        print(f'Epoch: {epoch}, loss: {epoch_loss}, accuracy: {round(total_correct/total_samples, 4)}')
 
 
 
