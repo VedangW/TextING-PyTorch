@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
-from texting.inits import glorot, zeros
+from inits import glorot, zeros
 
 
 def sparse_dropout(x, keep_prob, noise_shape):
@@ -64,12 +65,31 @@ def dot(x, y, sparse=False):
     if sparse:
         res = sparse_dense_matmul_batch(x, y)
     else:
-        res = torch.mm(x, y)
+        res = torch.matmul(x, y)
 
     return res
 
 def gru_unit(support, x, var, act, mask, dropout, sparse_inputs=False):
-    return x
+    # message passing
+    support = torch.nn.Dropout(p=dropout)(support)
+    a = torch.matmul(support, x)
+    
+    # update gate
+    z0 = dot(a, var['weights_z0'], sparse_inputs) + var['bias_z0']
+    z1 = dot(x, var['weights_z1'], sparse_inputs) + var['bias_z1'] 
+    z = torch.sigmoid(z0 + z1)
+    
+    # reset gate
+    r0 = dot(a, var['weights_r0'], sparse_inputs) + var['bias_r0']
+    r1 = dot(x, var['weights_r1'], sparse_inputs) + var['bias_r1']
+    r = torch.sigmoid(r0 + r1)
+
+    # update embeddings    
+    h0 = dot(a, var['weights_h0'], sparse_inputs) + var['bias_h0']
+    h1 = dot(r*x, var['weights_h1'], sparse_inputs) + var['bias_h1']
+    h = act(mask * (h0 + h1))
+    
+    return h*z + x*(1-z)
 
 
 class Dense(nn.Module):
@@ -116,7 +136,7 @@ class GraphLayer(nn.Module):
     Implements a GraphLayer which can have sparse or dense inputs.
     """
 
-    def __init__(self, input_dim, output_dim, configs, dropout=False,
+    def __init__(self, input_dim, output_dim, args, dropout=False,
                  sparse_inputs=False, activation=nn.ReLU, bias=False,
                  featureless=False, steps=2, **kwargs):
         """ Note: dropout value is passed from config, and not dropout. """
@@ -124,20 +144,15 @@ class GraphLayer(nn.Module):
         super(GraphLayer, self).__init__(**kwargs)
 
         if dropout:
-            self.dropout = configs['dropout']
+            self.dropout = args.dropout
         else:
             self.dropout = 0.
         
         self.activation = activation
-        self.support = configs['support']
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
-        self.mask = configs['mask']
         self.steps = steps
-
-        # helper variable for sparse dropout
-        self.num_features_nonzero = configs['num_features_nonzero']
 
         self.vars = nn.ParameterDict({
             'weights_encode': Parameter(glorot([input_dim, output_dim])),
@@ -156,19 +171,19 @@ class GraphLayer(nn.Module):
             'bias_h1': Parameter(zeros([output_dim]))
         })
 
-    def forward(self, x):
+    def forward(self, x, mask, support):
         if self.sparse_inputs:
-            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+            x = sparse_dropout(x, 1-self.dropout, x._nnz())
         else:
             dropout = nn.Dropout(p=1-self.dropout)
             x = dropout(x)
 
         x = dot(x, self.vars['weights_encode'], self.sparse_inputs) + self.vars['bias_encode']
-        output = self.mask * self.activation(x)
+        output = mask * self.activation(x)
 
         for _  in range(self.steps):
-            output = gru_unit(self.support, output, self.vars, 
-                              self.activation, self.mask, 1-self.dropout, 
+            output = gru_unit(support, output, self.vars, 
+                              self.activation, mask, 1-self.dropout, 
                               self.sparse_inputs)
 
         return output
@@ -177,40 +192,39 @@ class GraphLayer(nn.Module):
 class ReadoutLayer(nn.Module):
     """ Implements Readout layer of TextING. """
 
-    def __init__(self, input_dim, output_dim, configs, dropout=0.,
+    def __init__(self, input_dim, output_dim, args, dropout=0.,
                  sparse_inputs=False, act=nn.ReLU, bias=False, **kwargs):
         super(ReadoutLayer, self).__init__(**kwargs)
 
         if dropout:
-            self.dropout = configs['dropout']
+            self.dropout = nn.Dropout(1 - args.dropout)
         else:
-            self.dropout = 0.
+            self.dropout = nn.Identity()
         
         self.act = act
         self.sparse_inputs = sparse_inputs
         self.bias = bias
-        self.mask = configs['mask']
 
         self.vars = nn.ParameterDict({
-            'weights_att': glorot([input_dim, 1]),
-            'weights_emb': glorot([input_dim, input_dim]),
-            'weights_mlp': glorot([input_dim, output_dim]),
-            'bias_att': zeros([1]),
-            'bias_emb': zeros([input_dim]),
-            'bias_mlp': zeros([output_dim])
+            'weights_att': Parameter(glorot([input_dim, 1])),
+            'weights_emb': Parameter(glorot([input_dim, input_dim])),
+            'weights_mlp': Parameter(glorot([input_dim, output_dim])),
+            'bias_att': Parameter(zeros([1])),
+            'bias_emb': Parameter(zeros([input_dim])),
+            'bias_mlp': Parameter(zeros([output_dim]))
         })
 
-    def forward(self, x):
-        att = nn.Sigmoid(dot(x, self.vars['weights_att']) + self.vars['bias_att'])
+    def forward(self, x, mask):
+        att = F.sigmoid(dot(x, self.vars['weights_att']) + self.vars['bias_att'])
         emb = self.act(dot(x, self.vars['weights_emb']) + self.vars['bias_emb'])
 
-        N = torch.sum(self.mask, dim=1)
-        M = (self.mask-1) * 1e9
+        N = torch.sum(mask, dim=1)
+        M = (mask-1) * 1e9
     
         # TODO: Re-implement for sparse inputs
-        g = self.mask * att * emb
+        g = mask * att * emb
         g = torch.sum(g, dim=1) / N + torch.sum(g + M, dim=1)
-        g = nn.Dropout(g, 1-self.dropout)
+        g = self.dropout(g)
 
         # Classify
         # TODO: Re-implement using dot

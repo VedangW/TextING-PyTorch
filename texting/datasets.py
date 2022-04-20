@@ -11,9 +11,10 @@ class GraphDataset(Dataset):
         self.adjs, self.features, self.y = self._load_data(dataset_str, part)
         self.adjs, self.mask = self._preprocess_adj(self.adjs)
         self.features = self._preprocess_features(self.features)
+        self.output_dim = self.y.shape[1]
 
     def __getitem__(self, idx):
-        return self.features[idx], self.adjs[idx], self.mask[idx], self.y[idx]
+        return self.features[idx], self.adjs[idx], self.mask[idx], self.y[idx].tolist().index(1)
 
     def __len__(self):
         return len(self.y)
