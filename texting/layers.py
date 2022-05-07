@@ -148,7 +148,7 @@ class GraphLayer(nn.Module):
         else:
             self.dropout = 0.
         
-        self.activation = activation
+        self.activation = activation()
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
@@ -201,7 +201,7 @@ class ReadoutLayer(nn.Module):
         else:
             self.dropout = nn.Identity()
         
-        self.act = act
+        self.act = act()
         self.sparse_inputs = sparse_inputs
         self.bias = bias
 
@@ -219,7 +219,7 @@ class ReadoutLayer(nn.Module):
         emb = self.act(dot(x, self.vars['weights_emb']) + self.vars['bias_emb'])
 
         N = torch.sum(mask, dim=1)
-        M = (mask-1) * 1e9
+        M = (mask-1) * 1e-9
     
         # TODO: Re-implement for sparse inputs
         g = mask * att * emb

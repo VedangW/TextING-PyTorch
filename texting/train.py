@@ -8,6 +8,7 @@ from sklearn import metrics
 from models import MLP, GatedGNN
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+import wandb
 
 
 def to_tensor_device(*args, device):
@@ -39,6 +40,8 @@ def train_one_epoch(model, train_loader, args, criterion, optimizer):
         output = model(*inputs)
         weights_loss = model.l2_loss()
         classification_loss = criterion(output, y)
+        # print(f'{output=}, {weights_loss=}, {classification_loss=}')
+        # time.sleep(1)
         loss = weights_loss + classification_loss
         optimizer.zero_grad()
         loss.backward()
@@ -49,7 +52,6 @@ def train_one_epoch(model, train_loader, args, criterion, optimizer):
 
     epoch_loss /= total_samples
     accuracy = round(total_correct/total_samples, 4)
-    print(f'Training:\nloss: {epoch_loss}, accuracy: {accuracy}')
     return epoch_loss, accuracy
 
 def evaluate(model, val_loader, criterion, args):
@@ -71,22 +73,33 @@ def evaluate(model, val_loader, criterion, args):
 
     val_loss /= total_samples
     val_accuracy = round(total_correct/total_samples, 4)
-    print(f'Validation:\nloss: {val_loss}, accuracy: {val_accuracy}')
     return val_loss, val_accuracy
 
 def train(model, train_loader, val_loader, epochs, args):
-    min_val_loss = float('inf')
+    if args.wandb:
+        wandb.init(project='TextING-cs533')
+    max_val_acc = 0
     model = model.to(args.device)
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     print('Starting training')
     for epoch in range(epochs):
-        print(f'Epoch: {epoch}')
         train_loss, train_acc = train_one_epoch(model, train_loader, args,
                                                 criterion, optimizer)
         val_loss, val_acc = evaluate(model, val_loader, criterion, args)
-        if val_loss < min_val_loss:
-            min_val_loss = val_loss
+        print(f'{epoch=}, {train_loss=}, {train_acc=}, {val_loss=}, {val_acc=}')
+        if args.wandb:
+            log_dict = dict(
+                epoch=epoch, 
+                train_loss=train_loss, 
+                train_acc=train_acc, 
+                val_loss=val_loss, 
+                val_acc=val_acc
+            )
+            wandb.log(log_dict)
+
+        if val_acc > max_val_acc:
+            max_val_acc = val_acc
             save_model(model, epoch, train_loss, val_loss, 
                         train_acc, val_acc, os.path.join(args.save_dir, 'model.pt'))
 
@@ -94,9 +107,10 @@ def train(model, train_loader, val_loader, epochs, args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='retrieval model parameters')
     parser.add_argument('--dataset', default='mr', type=str)
+    parser.add_argument('--wandb', default=True, type=bool)
     parser.add_argument('--learning_rate', default=0.005, type=float)
-    parser.add_argument('--epochs', default=200, type=int)
-    parser.add_argument('--batch_size', default=256, type=int)
+    parser.add_argument('--epochs', default=10000, type=int)
+    parser.add_argument('--batch_size', default=4096, type=int)
     parser.add_argument('--input_dim', default=300, type=int)
     parser.add_argument('--hidden', default=96, type=int)
     parser.add_argument('--gnn_steps', default=2, type=int)

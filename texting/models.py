@@ -59,12 +59,12 @@ class GatedGNN(Model):
                               dropout=True, 
                               steps=self.args.gnn_steps, 
                               sparse_inputs=False, 
-                              activation=nn.Tanh())
+                              activation=nn.Tanh)
 
         self.readout = ReadoutLayer(input_dim=self.hidden_dim, 
                                     output_dim=self.output_dim, 
                                     args=self.args, 
-                                    act=nn.Tanh(), 
+                                    act=nn.Tanh, 
                                     sparse_inputs=False, 
                                     dropout=True)
     
@@ -82,7 +82,7 @@ class GatedGNN(Model):
     def forward(self, x, mask, support):
         x = self.gl1(x, mask, support)
         x = self.readout(x, mask)
-        x = self.softmax(x)
+        # x = self.softmax(x)
 
         return x
 
