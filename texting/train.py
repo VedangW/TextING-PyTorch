@@ -1,13 +1,16 @@
 import os
 import argparse
 import time
+import wandb
+import torch
+
 
 from datasets import GraphDataset
 from sklearn import metrics
 from models import MLP, GatedGNN
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-import wandb
+
 
 
 def to_tensor_device(*args, device):
@@ -76,7 +79,9 @@ def evaluate(model, val_loader, criterion, args):
 
 def train(model, train_loader, val_loader, epochs, args):
     if args.wandb:
-        wandb.init(project='TextING-cs533')
+        wandb.init(project='TextING-cs533', config=args)
+        wandb.config.update(args)
+        os.makedirs(os.path.join(args.save_dir, wandb.run.id), exist_ok=True)
     max_val_acc = 0
     model = model.to(args.device)
     criterion = torch.nn.CrossEntropyLoss()
@@ -100,11 +105,11 @@ def train(model, train_loader, val_loader, epochs, args):
         if val_acc > max_val_acc:
             max_val_acc = val_acc
             save_model(model, epoch, train_loss, val_loss, 
-                        train_acc, val_acc, os.path.join(args.save_dir, 'model.pt'))
+                        train_acc, val_acc, os.path.join(args.save_dir, wandb.run.id, f'model_{args.dataset}.pt'))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='retrieval model parameters')
+    parser = argparse.ArgumentParser(description='TextING training options')
     parser.add_argument('--dataset', default='mr', type=str)
     parser.add_argument('--wandb', default=True, type=bool)
     parser.add_argument('--learning_rate', default=0.005, type=float)
